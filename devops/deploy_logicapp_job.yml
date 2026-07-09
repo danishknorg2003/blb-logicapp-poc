@@ -1,0 +1,102 @@
+# ============================================================================
+# Job Template: deploy_logicapp_job.yml
+# Purpose    : Deploys the Consumption Logic App + managed connections via
+#              logicapp-template.json. The workflow definition
+#              (devops/arm/workflow.json) is read at pipeline runtime,
+#              compressed, and injected as the ARM "workflowDefinition"
+#              object parameter - it is never duplicated/hardcoded here.
+# Consumed by: azure-master-pipelines.yml (DEV and PROD stages)
+# ============================================================================
+
+parameters:
+  - name: subscription
+    type: string          # Subscription ID/name - used as the ARM deployment target subscription
+  - name: azureServiceConnection
+    type: string          # Azure DevOps ARM service connection name
+  - name: resourceGroup
+    type: string
+  - name: location
+    type: string
+  - name: storageAccountName
+    type: string
+  - name: containerName
+    type: string
+  - name: logicAppName
+    type: string
+  - name: folderPath
+    type: string
+  - name: emailTo
+    type: string
+  - name: logicAppState
+    type: string
+  - name: workflowRecurrenceInterval
+    type: number
+  - name: workflowRecurrenceFrequency
+    type: string
+  - name: environmentName
+    type: string
+  - name: jobName
+    type: string
+    default: 'DeployLogicApp'
+  - name: skipJob
+    type: boolean
+    default: false
+
+jobs:
+  - deployment: ${{ parameters.jobName }}
+    displayName: 'Deploy Logic App - ${{ parameters.environmentName }}'
+    condition: eq('${{ parameters.skipJob }}', false)
+    environment: ${{ parameters.environmentName }}
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            - checkout: self
+
+            # Read workflow.json, minify it and expose it as a pipeline
+            # variable so it can be passed into overrideParameters as a
+            # single-line ARM "object" parameter value.
+            - task: PowerShell@2
+              displayName: 'Load workflow.json definition'
+              name: loadWorkflow
+              inputs:
+                targetType: 'inline'
+                pwsh: true
+                script: |
+                  $workflowPath = "$(Build.SourcesDirectory)/devops/arm/workflow.json"
+                  if (-not (Test-Path $workflowPath)) {
+                    Write-Error "workflow.json not found at $workflowPath"
+                    exit 1
+                  }
+
+                  # Validate JSON and re-serialize compactly (single line, escaped quotes)
+                  $json = Get-Content -Raw -Path $workflowPath | ConvertFrom-Json -Depth 50
+                  $compact = $json | ConvertTo-Json -Depth 50 -Compress
+                  $escaped = $compact.Replace('"', '\"')
+
+                  Write-Host "##vso[task.setvariable variable=workflowDefinitionJson]$escaped"
+
+            - task: AzureResourceManagerTemplateDeployment@3
+              displayName: 'ARM Deploy - Logic App & Connections (${{ parameters.environmentName }})'
+              inputs:
+                deploymentScope: 'Resource Group'
+                azureResourceManagerConnection: '${{ parameters.azureServiceConnection }}'
+                subscriptionId: '${{ parameters.subscription }}'
+                action: 'Create Or Update Resource Group'
+                resourceGroupName: '${{ parameters.resourceGroup }}'
+                location: '${{ parameters.location }}'
+                templateLocation: 'Linked artifact'
+                csmFile: '$(Build.SourcesDirectory)/devops/arm/logicapp-template.json'
+                overrideParameters: >
+                  -logicAppName "${{ parameters.logicAppName }}"
+                  -location "${{ parameters.location }}"
+                  -logicAppState "${{ parameters.logicAppState }}"
+                  -storageAccountName "${{ parameters.storageAccountName }}"
+                  -containerName "${{ parameters.containerName }}"
+                  -folderPath "${{ parameters.folderPath }}"
+                  -emailTo "${{ parameters.emailTo }}"
+                  -workflowRecurrenceInterval ${{ parameters.workflowRecurrenceInterval }}
+                  -workflowRecurrenceFrequency "${{ parameters.workflowRecurrenceFrequency }}"
+                  -workflowDefinition "$(workflowDefinitionJson)"
+                deploymentMode: 'Incremental'
+                deploymentName: 'logicapp-$(Build.BuildId)-${{ parameters.environmentName }}'

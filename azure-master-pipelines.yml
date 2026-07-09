@@ -1,0 +1,186 @@
+# ============================================================================
+# azure-master-pipelines.yml
+# Purpose : Master orchestration pipeline. NEVER deploys ARM templates
+#           directly - all deployment logic lives in devops/jobs/*.yml
+#           job templates. This file wires Library variable groups +
+#           deployment configuration into those templates for the
+#           Build -> DEV -> PROD stage flow.
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Runtime parameters - allow DEV/PROD to be independently skipped at queue time
+# ----------------------------------------------------------------------------
+parameters:
+  - name: skipDev
+    displayName: 'Skip DEV stage'
+    type: boolean
+    default: false
+  - name: skipProd
+    displayName: 'Skip PROD stage'
+    type: boolean
+    default: false
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - devops/*
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+# ----------------------------------------------------------------------------
+# DEPLOYMENT CONFIGURATION
+# Per requirements, these are NOT stored in the Library - they are owned by
+# this pipeline and passed down: Master Pipeline -> Job Template -> ARM.
+# Environment-specific overrides are applied at stage level below.
+# ----------------------------------------------------------------------------
+variables:
+  - name: storageSku
+    value: 'Standard_LRS'
+  - name: logicAppState
+    value: 'Enabled'
+  - name: workflowRecurrenceInterval
+    value: 5
+  - name: workflowRecurrenceFrequency
+    value: 'Minute'
+
+stages:
+  # ==========================================================================
+  # STAGE 1 - BUILD: static validation only, no resources touched
+  # ==========================================================================
+  - stage: Build
+    displayName: 'Build & Validate'
+    jobs:
+      - job: ValidateArtifacts
+        displayName: 'Validate ARM/JSON and YAML syntax'
+        steps:
+          - checkout: self
+
+          - task: PowerShell@2
+            displayName: 'Validate JSON syntax (ARM templates + workflow definition)'
+            inputs:
+              targetType: 'inline'
+              pwsh: true
+              script: |
+                $files = @(
+                  "$(Build.SourcesDirectory)/devops/arm/storage-template.json",
+                  "$(Build.SourcesDirectory)/devops/arm/logicapp-template.json",
+                  "$(Build.SourcesDirectory)/devops/arm/workflow.json"
+                )
+                $hasError = $false
+                foreach ($file in $files) {
+                  try {
+                    Get-Content -Raw -Path $file | ConvertFrom-Json -Depth 50 | Out-Null
+                    Write-Host "OK: $file is valid JSON"
+                  } catch {
+                    Write-Error "INVALID JSON: $file -> $($_.Exception.Message)"
+                    $hasError = $true
+                  }
+                }
+                if ($hasError) { exit 1 }
+
+          - task: AzureCLI@2
+            displayName: 'Validate ARM template schema (what-if, no deployment)'
+            inputs:
+              azureSubscription: '$(azureServiceConnection)'
+              scriptType: 'pscore'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az deployment group validate `
+                  --resource-group "$(resourceGroup)" `
+                  --template-file "$(Build.SourcesDirectory)/devops/arm/storage-template.json" `
+                  --parameters storageAccountName="$(storageAccountName)" location="$(location)" storageSku="$(storageSku)" containerName="$(containerName)"
+            condition: false # Enable once DEV RG/service connection exist; kept explicit/off for a clean first-run POC
+
+  # ==========================================================================
+  # STAGE 2 - DEV
+  # ==========================================================================
+  - stage: DEV
+    displayName: 'Deploy to DEV'
+    dependsOn: Build
+    condition: and(succeeded(), eq('${{ parameters.skipDev }}', false))
+    variables:
+      - group: 'Common - All'
+      - group: 'Common - DEV'
+    jobs:
+      - template: jobs/deploy_storage_job.yml
+        parameters:
+          subscription: '$(subscription)'
+          azureServiceConnection: '$(azureServiceConnection)'
+          resourceGroup: '$(resourceGroup)'
+          location: '$(location)'
+          storageAccountName: '$(storageAccountName)'
+          containerName: '$(containerName)'
+          storageSku: '$(storageSku)'
+          environmentName: 'DEV'
+          jobName: 'DeployStorageDev'
+          skipJob: ${{ parameters.skipDev }}
+
+      - template: jobs/deploy_logicapp_job.yml
+        parameters:
+          subscription: '$(subscription)'
+          azureServiceConnection: '$(azureServiceConnection)'
+          resourceGroup: '$(resourceGroup)'
+          location: '$(location)'
+          storageAccountName: '$(storageAccountName)'
+          containerName: '$(containerName)'
+          logicAppName: '$(logicAppName)'
+          folderPath: '$(folderPath)'
+          emailTo: '$(emailTo)'
+          logicAppState: '$(logicAppState)'
+          workflowRecurrenceInterval: $(workflowRecurrenceInterval)
+          workflowRecurrenceFrequency: '$(workflowRecurrenceFrequency)'
+          environmentName: 'DEV'
+          jobName: 'DeployLogicAppDev'
+          skipJob: ${{ parameters.skipDev }}
+
+  # ==========================================================================
+  # STAGE 3 - PROD
+  # PROD deliberately depends only on Build (not DEV) so that skipping DEV
+  # does not block a PROD release; the two stages remain independently
+  # skippable as required.
+  # ==========================================================================
+  - stage: PROD
+    displayName: 'Deploy to PROD'
+    dependsOn: Build
+    condition: and(succeeded(), eq('${{ parameters.skipProd }}', false))
+    variables:
+      - group: 'Common - All'
+      - group: 'Common - PROD'
+      # PROD-specific deployment configuration overrides (still pipeline-owned, not Library)
+      - name: storageSku
+        value: 'Standard_GRS'
+    jobs:
+      - template: jobs/deploy_storage_job.yml
+        parameters:
+          subscription: '$(subscription)'
+          azureServiceConnection: '$(azureServiceConnection)'
+          resourceGroup: '$(resourceGroup)'
+          location: '$(location)'
+          storageAccountName: '$(storageAccountName)'
+          containerName: '$(containerName)'
+          storageSku: '$(storageSku)'
+          environmentName: 'PROD'
+          jobName: 'DeployStorageProd'
+          skipJob: ${{ parameters.skipProd }}
+
+      - template: jobs/deploy_logicapp_job.yml
+        parameters:
+          subscription: '$(subscription)'
+          azureServiceConnection: '$(azureServiceConnection)'
+          resourceGroup: '$(resourceGroup)'
+          location: '$(location)'
+          storageAccountName: '$(storageAccountName)'
+          containerName: '$(containerName)'
+          logicAppName: '$(logicAppName)'
+          folderPath: '$(folderPath)'
+          emailTo: '$(emailTo)'
+          logicAppState: '$(logicAppState)'
+          workflowRecurrenceInterval: $(workflowRecurrenceInterval)
+          workflowRecurrenceFrequency: '$(workflowRecurrenceFrequency)'
+          environmentName: 'PROD'
+          jobName: 'DeployLogicAppProd'
+          skipJob: ${{ parameters.skipProd }}

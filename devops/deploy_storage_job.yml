@@ -1,0 +1,61 @@
+# ============================================================================
+# Job Template: deploy_storage_job.yml
+# Purpose    : Deploys the Storage Account + Blob Container via
+#              storage-template.json using an incremental ARM deployment.
+# Consumed by: azure-master-pipelines.yml (DEV and PROD stages)
+# ============================================================================
+
+parameters:
+  - name: subscription
+    type: string          # Subscription ID/name - used as the ARM deployment target subscription
+  - name: azureServiceConnection
+    type: string          # Azure DevOps ARM service connection name
+  - name: resourceGroup
+    type: string
+  - name: location
+    type: string
+  - name: storageAccountName
+    type: string
+  - name: containerName
+    type: string
+  - name: storageSku
+    type: string
+  - name: environmentName
+    type: string
+  - name: jobName
+    type: string
+    default: 'DeployStorage'
+  - name: skipJob
+    type: boolean
+    default: false
+
+jobs:
+  - deployment: ${{ parameters.jobName }}
+    displayName: 'Deploy Storage Account - ${{ parameters.environmentName }}'
+    condition: eq('${{ parameters.skipJob }}', false)
+    environment: ${{ parameters.environmentName }}
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            - checkout: self
+
+            - task: AzureResourceManagerTemplateDeployment@3
+              displayName: 'ARM Deploy - Storage Account & Container (${{ parameters.environmentName }})'
+              inputs:
+                deploymentScope: 'Resource Group'
+                azureResourceManagerConnection: '${{ parameters.azureServiceConnection }}'
+                subscriptionId: '${{ parameters.subscription }}'
+                action: 'Create Or Update Resource Group'
+                resourceGroupName: '${{ parameters.resourceGroup }}'
+                location: '${{ parameters.location }}'
+                templateLocation: 'Linked artifact'
+                csmFile: '$(Build.SourcesDirectory)/devops/arm/storage-template.json'
+                # overrideParameters used instead of a parameters.json file, as required
+                overrideParameters: >
+                  -storageAccountName "${{ parameters.storageAccountName }}"
+                  -location "${{ parameters.location }}"
+                  -storageSku "${{ parameters.storageSku }}"
+                  -containerName "${{ parameters.containerName }}"
+                deploymentMode: 'Incremental'
+                deploymentName: 'storage-$(Build.BuildId)-${{ parameters.environmentName }}'
