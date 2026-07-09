@@ -1,0 +1,120 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+
+  "parameters": {
+    "$connections": {
+      "type": "Object",
+      "defaultValue": {}
+    },
+    "storageAccountName": {
+      "type": "String",
+      "defaultValue": ""
+    },
+    "containerName": {
+      "type": "String",
+      "defaultValue": ""
+    },
+    "folderPath": {
+      "type": "String",
+      "defaultValue": ""
+    },
+    "emailTo": {
+      "type": "String",
+      "defaultValue": ""
+    },
+    "recurrenceInterval": {
+      "type": "Int",
+      "defaultValue": 5
+    },
+    "recurrenceFrequency": {
+      "type": "String",
+      "defaultValue": "Minute"
+    }
+  },
+
+  "triggers": {
+    "Recurrence_Trigger": {
+      "type": "Recurrence",
+      "recurrence": {
+        "frequency": "@parameters('recurrenceFrequency')",
+        "interval": "@parameters('recurrenceInterval')"
+      }
+    }
+  },
+
+  "actions": {
+    "List_Blobs_In_Folder": {
+      "type": "ApiConnection",
+      "runAfter": {},
+      "inputs": {
+        "host": {
+          "connection": {
+            "name": "@parameters('$connections')['azureblob']['connectionId']"
+          }
+        },
+        "method": "get",
+        "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/foldersV2/@{encodeURIComponent(encodeURIComponent(concat(parameters('containerName'), '/', parameters('folderPath'))))}"
+      },
+      "metadata": {
+        "description": "Lists all blobs inside the configured container/folder using the Azure Blob managed connector."
+      }
+    },
+
+    "For_Each_Blob": {
+      "type": "Foreach",
+      "foreach": "@body('List_Blobs_In_Folder')?['value']",
+      "runAfter": {
+        "List_Blobs_In_Folder": ["Succeeded"]
+      },
+      "actions": {
+        "Get_Blob_Metadata": {
+          "type": "ApiConnection",
+          "runAfter": {},
+          "inputs": {
+            "host": {
+              "connection": {
+                "name": "@parameters('$connections')['azureblob']['connectionId']"
+              }
+            },
+            "method": "get",
+            "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent(parameters('storageAccountName')))}/files/@{encodeURIComponent(encodeURIComponent(items('For_Each_Blob')?['Id']))}"
+          },
+          "metadata": {
+            "description": "Retrieves size, last-modified date and content type for the current blob."
+          }
+        },
+
+        "Send_Blob_Notification_Email": {
+          "type": "ApiConnection",
+          "runAfter": {
+            "Get_Blob_Metadata": ["Succeeded"]
+          },
+          "inputs": {
+            "host": {
+              "connection": {
+                "name": "@parameters('$connections')['office365']['connectionId']"
+              }
+            },
+            "method": "post",
+            "path": "/v2/Mail",
+            "body": {
+              "To": "@parameters('emailTo')",
+              "Subject": "@{concat('New Blob Detected: ', items('For_Each_Blob')?['DisplayName'])}",
+              "Body": "<p><b>Storage Account:</b> @{parameters('storageAccountName')}</p><p><b>Container:</b> @{parameters('containerName')}</p><p><b>Folder:</b> @{parameters('folderPath')}</p><p><b>Blob Name:</b> @{items('For_Each_Blob')?['DisplayName']}</p><p><b>Blob Size (bytes):</b> @{body('Get_Blob_Metadata')?['Size']}</p><p><b>Last Modified:</b> @{body('Get_Blob_Metadata')?['LastModified']}</p><p><b>Content Type:</b> @{body('Get_Blob_Metadata')?['MediaType']}</p>",
+              "Importance": "Normal"
+            }
+          },
+          "metadata": {
+            "description": "Sends a notification email via Office 365 Outlook containing full blob metadata."
+          }
+        }
+      },
+      "metadata": {
+        "description": "Iterates over every blob returned by the List_Blobs_In_Folder action."
+      }
+    }
+  },
+
+  "outputs": {}
+}
