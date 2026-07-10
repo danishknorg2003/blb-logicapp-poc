@@ -81,7 +81,7 @@ jobs:
               inputs:
                 deploymentScope: 'Resource Group'
                 azureResourceManagerConnection: '${{ parameters.azureServiceConnection }}'
-                subscriptionId: '${{ parameters.subscription }}'
+                #subscriptionId: '${{ parameters.subscription }}'
                 action: 'Create Or Update Resource Group'
                 resourceGroupName: '${{ parameters.resourceGroup }}'
                 location: '${{ parameters.location }}'
