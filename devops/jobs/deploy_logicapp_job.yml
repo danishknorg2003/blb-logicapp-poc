@@ -30,7 +30,7 @@ parameters:
   - name: logicAppState
     type: string
   - name: workflowRecurrenceInterval
-    type: number
+    type: string
   - name: workflowRecurrenceFrequency
     type: string
   - name: environmentName
