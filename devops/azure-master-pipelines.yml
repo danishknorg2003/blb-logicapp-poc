@@ -108,7 +108,7 @@ stages:
     jobs:
       - template: jobs/deploy_storage_job.yml
         parameters:
-          subscription: '$(subscription)'
+         # subscription: '$(subscription)'
           azureServiceConnection: 'My Managed identity'
           resourceGroup: '$(resourceGroup)'
           location: '$(location)'
@@ -121,7 +121,7 @@ stages:
 
       - template: jobs/deploy_logicapp_job.yml
         parameters:
-          subscription: '$(subscription)'
+         # subscription: '$(subscription)'
           azureServiceConnection: 'My Managed identity'
           resourceGroup: '$(resourceGroup)'
           location: '$(location)'
@@ -156,7 +156,7 @@ stages:
     jobs:
       - template: jobs/deploy_storage_job.yml
         parameters:
-          subscription: '$(subscription)'
+          #subscription: '$(subscription)'
           azureServiceConnection: 'My Managed identity'
           resourceGroup: '$(resourceGroup)'
           location: '$(location)'
@@ -169,7 +169,7 @@ stages:
 
       - template: jobs/deploy_logicapp_job.yml
         parameters:
-          subscription: '$(subscription)'
+          #subscription: '$(subscription)'
           azureServiceConnection: 'My Managed identity'
           resourceGroup: '$(resourceGroup)'
           location: '$(location)'
