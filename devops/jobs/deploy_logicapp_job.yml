@@ -41,10 +41,13 @@ parameters:
   - name: skipJob
     type: boolean
     default: false
+  - name: dependsOn
+    type: string
+    default: '' 
 
 jobs:
   - deployment: ${{ parameters.jobName }}
-    dependsOn: DeployStorageDev
+    dependsOn: ${{ parameters.dependsOn }}
     displayName: 'Deploy Logic App - ${{ parameters.environmentName }}'
     condition: eq('${{ parameters.skipJob }}', false)
     environment: ${{ parameters.environmentName }}
