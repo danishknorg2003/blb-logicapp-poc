@@ -22,7 +22,7 @@
       "metadata": { "description": "Enabled/Disabled state of the Logic App, driven by deployment configuration." }
     },
     "workflowDefinition": {
-      "type": "string",
+      "type": "object",
       "metadata": { "description": "The full Logic Apps workflow definition JSON (contents of workflow.json), passed in as an override parameter by the pipeline job template." }
     },
     "storageAccountName": {
