@@ -110,6 +110,7 @@ stages:
         parameters:
          # subscription: '$(subscription)'
           azureServiceConnection: 'My Managed identity'
+          dependsOn: DeployStorageDev
           resourceGroup: '$(resourceGroup)'
           location: '$(location)'
           storageAccountName: '$(storageAccountName)'
@@ -158,6 +159,7 @@ stages:
         parameters:
           #subscription: '$(subscription)'
           azureServiceConnection: 'My Managed identity'
+          dependsOn: DeployStorageProd
           resourceGroup: '$(resourceGroup)'
           location: '$(location)'
           storageAccountName: '$(storageAccountName)'
