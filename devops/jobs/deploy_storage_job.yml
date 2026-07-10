@@ -6,8 +6,8 @@
 # ============================================================================
 
 parameters:
-  - name: subscription
-    type: string          # Subscription ID/name - used as the ARM deployment target subscription
+ # - name: subscription
+ #   type: string          # Subscription ID/name - used as the ARM deployment target subscription
   - name: azureServiceConnection
     type: string          # Azure DevOps ARM service connection name
   - name: resourceGroup
