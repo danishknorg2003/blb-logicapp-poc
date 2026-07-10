@@ -85,7 +85,7 @@ stages:
           - task: AzureCLI@2
             displayName: 'Validate ARM template schema (what-if, no deployment)'
             inputs:
-              azureSubscription: '$(azureServiceConnection)'
+              azureSubscription: 'My Managed identity'
               scriptType: 'pscore'
               scriptLocation: 'inlineScript'
               inlineScript: |
@@ -109,7 +109,7 @@ stages:
       - template: jobs/deploy_storage_job.yml
         parameters:
           subscription: '$(subscription)'
-          azureServiceConnection: '$(azureServiceConnection)'
+          azureServiceConnection: 'My Managed identity'
           resourceGroup: '$(resourceGroup)'
           location: '$(location)'
           storageAccountName: '$(storageAccountName)'
@@ -122,7 +122,7 @@ stages:
       - template: jobs/deploy_logicapp_job.yml
         parameters:
           subscription: '$(subscription)'
-          azureServiceConnection: '$(azureServiceConnection)'
+          azureServiceConnection: 'My Managed identity'
           resourceGroup: '$(resourceGroup)'
           location: '$(location)'
           storageAccountName: '$(storageAccountName)'
@@ -157,7 +157,7 @@ stages:
       - template: jobs/deploy_storage_job.yml
         parameters:
           subscription: '$(subscription)'
-          azureServiceConnection: '$(azureServiceConnection)'
+          azureServiceConnection: 'My Managed identity'
           resourceGroup: '$(resourceGroup)'
           location: '$(location)'
           storageAccountName: '$(storageAccountName)'
@@ -170,7 +170,7 @@ stages:
       - template: jobs/deploy_logicapp_job.yml
         parameters:
           subscription: '$(subscription)'
-          azureServiceConnection: '$(azureServiceConnection)'
+          azureServiceConnection: 'My Managed identity'
           resourceGroup: '$(resourceGroup)'
           location: '$(location)'
           storageAccountName: '$(storageAccountName)'
